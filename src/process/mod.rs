@@ -17,7 +17,7 @@ use pcb::PcbData;
 // Main Process Data Structure 
 
 /// Represents a single process on the system.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Process {
     pub process_id: u32,
     pub user_id: u32,

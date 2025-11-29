@@ -1,6 +1,6 @@
 
 /// This holds key metrics retrieved from the Linux kernel via /proc.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PcbData {
     pub cpu_percent: f32, 
     pub memory_rss_mb: u64, 
