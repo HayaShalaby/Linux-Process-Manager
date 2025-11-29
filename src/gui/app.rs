@@ -812,12 +812,25 @@ impl eframe::App for ProcessManagerApp {
                 ui.separator();
 
                 // Process details and actions panel
-                // Copy the selected PID to avoid borrowing conflicts
+                // Copy the selected PID and process data to avoid borrowing conflicts
                 let selected_pid = self.selected_pid;
-                if let Some(process) = selected_pid.and_then(|pid| {
-                    self.processes.iter().find(|p| p.process_id == pid)
-                }) {
-                    let process_pid = process.process_id;
+                let process_data = selected_pid.and_then(|pid| {
+                    self.processes.iter().find(|p| p.process_id == pid).map(|p| {
+                        (
+                            p.process_id,
+                            p.name.clone(),
+                            p.user_id,
+                            p.parent_id,
+                            p.pcb_data.state,
+                            p.pcb_data.memory_rss_mb,
+                            p.pcb_data.priority,
+                            p.pcb_data.cpu_percent,
+                            self.get_abnormality_reason(p),
+                        )
+                    })
+                });
+                
+                if let Some((process_pid, process_name, user_id, parent_id, state, memory, priority, cpu, abnormality_reason)) = process_data {
                     egui::CollapsingHeader::new("Process Details & Actions")
                         .default_open(true)
                         .show(ui, |ui| {
@@ -828,28 +841,27 @@ impl eframe::App for ProcessManagerApp {
                                     .spacing([20.0, 4.0])
                                     .show(ui, |ui| {
                                         ui.label("Process ID:");
-                                        ui.label(process.process_id.to_string());
+                                        ui.label(process_pid.to_string());
                                         ui.end_row();
 
                                         ui.label("Name:");
-                                        ui.label(&process.name);
+                                        ui.label(&process_name);
                                         ui.end_row();
 
                                         ui.label("User ID:");
-                                        ui.label(process.user_id.to_string());
+                                        ui.label(user_id.to_string());
                                         ui.end_row();
 
                                         ui.label("Parent PID:");
                                         ui.label(
-                                            process
-                                                .parent_id
+                                            parent_id
                                                 .map(|p| p.to_string())
                                                 .unwrap_or_else(|| "N/A".to_string()),
                                         );
                                         ui.end_row();
 
                                         ui.label("State:");
-                                        let state_color = match process.pcb_data.state {
+                                        let state_color = match state {
                                             'R' => Color32::GREEN,
                                             'S' => Color32::BLUE,
                                             'D' => Color32::RED,
@@ -857,23 +869,22 @@ impl eframe::App for ProcessManagerApp {
                                             'T' => Color32::GRAY,
                                             _ => Color32::WHITE,
                                         };
-                                        ui.colored_label(state_color, process.pcb_data.state.to_string());
+                                        ui.colored_label(state_color, state.to_string());
                                         ui.end_row();
 
                                         ui.label("Memory (RSS):");
-                                        ui.label(format!("{:.2} MB", process.pcb_data.memory_rss_mb));
+                                        ui.label(format!("{:.2} MB", memory));
                                         ui.end_row();
 
                                         ui.label("Priority (Nice):");
-                                        ui.label(process.pcb_data.priority.to_string());
+                                        ui.label(priority.to_string());
                                         ui.end_row();
 
                                         ui.label("CPU %:");
-                                        ui.label(format!("{:.2}%", process.pcb_data.cpu_percent));
+                                        ui.label(format!("{:.2}%", cpu));
                                         ui.end_row();
 
                                         // Show abnormality reason if any
-                                        let abnormality_reason = self.get_abnormality_reason(process);
                                         if let Some(reason) = abnormality_reason {
                                             ui.label("⚠️ Warning:");
                                             ui.colored_label(Color32::YELLOW, reason);
