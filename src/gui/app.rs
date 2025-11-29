@@ -233,12 +233,16 @@ impl ProcessManagerApp {
         }
         
         // Second pass: build parent-child relationships
+        // Collect child nodes to add to parents
+        let mut children_to_add: Vec<(u32, ProcessNode)> = Vec::new();
         let mut roots = Vec::new();
+        
         for process in &self.processes {
             if let Some(parent_id) = process.parent_id {
-                if let Some(parent_node) = node_map.get_mut(&parent_id) {
+                if node_map.contains_key(&parent_id) {
+                    // Parent exists, we'll add this as a child
                     if let Some(child_node) = node_map.remove(&process.process_id) {
-                        parent_node.children.push(child_node);
+                        children_to_add.push((parent_id, child_node));
                     }
                 } else {
                     // Parent not found, treat as root
@@ -250,6 +254,21 @@ impl ProcessManagerApp {
                 // No parent, it's a root
                 if let Some(root_node) = node_map.remove(&process.process_id) {
                     roots.push(root_node);
+                }
+            }
+        }
+        
+        // Add children to their parents
+        for (parent_id, child_node) in children_to_add {
+            if let Some(parent_node) = node_map.get_mut(&parent_id) {
+                parent_node.children.push(child_node);
+            } else {
+                // Parent was already moved to roots, find it and add child
+                for root in &mut roots {
+                    if root.process.process_id == parent_id {
+                        root.children.push(child_node);
+                        break;
+                    }
                 }
             }
         }
@@ -709,6 +728,9 @@ impl eframe::App for ProcessManagerApp {
                                 ui.end_row();
 
                                 // Data rows
+                                // Collect selection changes to avoid borrowing conflicts
+                                let mut selection_changes: Vec<u32> = Vec::new();
+                                
                                 for &idx in &self.filtered_processes {
                                     let process = &self.processes[idx];
                                     let is_selected = self.selected_pids.contains(&process.process_id);
@@ -717,7 +739,7 @@ impl eframe::App for ProcessManagerApp {
                                     // Selection checkbox
                                     let mut checked = is_selected;
                                     if ui.checkbox(&mut checked, "").changed() {
-                                        self.toggle_selection(process.process_id);
+                                        selection_changes.push(process.process_id);
                                     }
 
                                     // PID column
@@ -778,6 +800,11 @@ impl eframe::App for ProcessManagerApp {
 
                                     ui.end_row();
                                 }
+                                
+                                // Apply selection changes after the loop
+                                for pid in selection_changes {
+                                    self.toggle_selection(pid);
+                                }
                             });
                     });
                 }
@@ -785,7 +812,12 @@ impl eframe::App for ProcessManagerApp {
                 ui.separator();
 
                 // Process details and actions panel
-                if let Some(process) = self.get_selected_process() {
+                // Copy the selected PID to avoid borrowing conflicts
+                let selected_pid = self.selected_pid;
+                if let Some(process) = selected_pid.and_then(|pid| {
+                    self.processes.iter().find(|p| p.process_id == pid)
+                }) {
+                    let process_pid = process.process_id;
                     egui::CollapsingHeader::new("Process Details & Actions")
                         .default_open(true)
                         .show(ui, |ui| {
@@ -841,7 +873,8 @@ impl eframe::App for ProcessManagerApp {
                                         ui.end_row();
 
                                         // Show abnormality reason if any
-                                        if let Some(reason) = self.get_abnormality_reason(process) {
+                                        let abnormality_reason = self.get_abnormality_reason(process);
+                                        if let Some(reason) = abnormality_reason {
                                             ui.label("⚠️ Warning:");
                                             ui.colored_label(Color32::YELLOW, reason);
                                             ui.end_row();
@@ -854,7 +887,7 @@ impl eframe::App for ProcessManagerApp {
                                     ui.separator();
 
                                     if ui.button("Kill").clicked() {
-                                        match self.kill_process(process.process_id) {
+                                        match self.kill_process(process_pid) {
                                             Ok(_) => {
                                                 self.refresh_processes();
                                             }
@@ -863,7 +896,7 @@ impl eframe::App for ProcessManagerApp {
                                     }
 
                                     if ui.button("Force Kill").clicked() {
-                                        match self.force_kill_process(process.process_id) {
+                                        match self.force_kill_process(process_pid) {
                                             Ok(_) => {
                                                 self.refresh_processes();
                                             }
@@ -872,7 +905,7 @@ impl eframe::App for ProcessManagerApp {
                                     }
 
                                     if ui.button("Pause").clicked() {
-                                        match self.pause_process(process.process_id) {
+                                        match self.pause_process(process_pid) {
                                             Ok(_) => {
                                                 self.refresh_processes();
                                             }
@@ -881,7 +914,7 @@ impl eframe::App for ProcessManagerApp {
                                     }
 
                                     if ui.button("Resume").clicked() {
-                                        match self.resume_process(process.process_id) {
+                                        match self.resume_process(process_pid) {
                                             Ok(_) => {
                                                 self.refresh_processes();
                                             }
@@ -897,7 +930,7 @@ impl eframe::App for ProcessManagerApp {
                                             .hint_text("-20 to 19"));
                                         if ui.button("Apply").clicked() {
                                             if let Ok(nice) = self.priority_input.parse::<i32>() {
-                                                match self.set_priority(process.process_id, nice) {
+                                                match self.set_priority(process_pid, nice) {
                                                     Ok(_) => {
                                                         self.priority_input.clear();
                                                         self.refresh_processes();
