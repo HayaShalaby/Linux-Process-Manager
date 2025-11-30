@@ -1,7 +1,6 @@
 mod process; 
 mod user;   
 mod manager;
-mod manager as manager_module;
 mod gui;
 
 use gui::ProcessManagerApp;
