@@ -7,7 +7,6 @@ use std::convert::TryFrom;
 
 // 1. Declare submodules
 mod pcb; 
-mod scheduler; // Placeholder
 pub mod tree;
 
 // 2. Import the public PcbData struct from the pcb submodule
