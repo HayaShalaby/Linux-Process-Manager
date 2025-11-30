@@ -2,6 +2,7 @@ use crate::process::Process;
 use crate::process::tree::ProcessNode;
 use crate::manager::Manager;
 use crate::manager::operations;
+use crate::manager::creation;
 use crate::user::{User, Privilege};
 use egui::{Color32, RichText, ScrollArea, TextEdit};
 use std::collections::{HashSet, HashMap};
@@ -43,6 +44,10 @@ pub struct ProcessManagerApp {
     show_threshold_config: bool,
     thresholds: ResourceThresholds,
     priority_input: String,
+    show_create_process: bool,
+    create_process_command: String,
+    create_process_args: String,
+    create_process_background: bool,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -54,6 +59,7 @@ enum SortColumn {
     Cpu,
     Memory,
     Priority,
+    Timer,
 }
 
 impl Default for ProcessManagerApp {
@@ -90,6 +96,10 @@ impl Default for ProcessManagerApp {
             show_threshold_config: false,
             thresholds: ResourceThresholds::default(),
             priority_input: String::new(),
+            show_create_process: false,
+            create_process_command: String::new(),
+            create_process_args: String::new(),
+            create_process_background: false,
         }
     }
 }
@@ -162,6 +172,10 @@ impl ProcessManagerApp {
                     .pcb_data
                     .priority
                     .cmp(&self.processes_vec[b].pcb_data.priority),
+                SortColumn::Timer => self.processes_vec[a]
+                    .pcb_data
+                    .uptime_seconds
+                    .cmp(&self.processes_vec[b].pcb_data.uptime_seconds),
             };
 
             if self.sort_ascending {
@@ -192,11 +206,26 @@ impl ProcessManagerApp {
         self.selected_pids.clear();
     }
 
-    /// Check if process is abnormal (zombie or exceeds thresholds)
+    /// Check if process is abnormal (zombie, deadlock, or exceeds thresholds)
     fn is_abnormal(&self, process: &Process) -> bool {
         process.pcb_data.state == 'Z' // Zombie
+            || self.is_deadlocked(process) // Deadlock detection
             || process.pcb_data.cpu_percent > self.thresholds.cpu_percent
             || process.pcb_data.memory_rss_mb > self.thresholds.memory_mb
+    }
+    
+    /// Basic deadlock detection heuristic
+    /// Detects processes that are in uninterruptible sleep (D state) for extended periods
+    /// This is a simple heuristic - true deadlock detection would require resource dependency analysis
+    fn is_deadlocked(&self, process: &Process) -> bool {
+        // Process in uninterruptible sleep (D state) for more than 30 seconds
+        // This is a heuristic - processes stuck in D state often indicate I/O deadlocks
+        if process.pcb_data.state == 'D' && process.pcb_data.uptime_seconds > 30 {
+            // Additional check: if process has been running for a while but is stuck in D state
+            // and hasn't made progress, it might be deadlocked
+            return true;
+        }
+        false
     }
 
     /// Get abnormality reason for display
@@ -204,6 +233,12 @@ impl ProcessManagerApp {
         let mut reasons = Vec::new();
         if process.pcb_data.state == 'Z' {
             reasons.push("Zombie process".to_string());
+        }
+        if self.is_deadlocked(process) {
+            reasons.push(format!(
+                "Possible deadlock (uninterruptible sleep for {}s)",
+                process.pcb_data.uptime_seconds
+            ));
         }
         if process.pcb_data.cpu_percent > self.thresholds.cpu_percent {
             reasons.push(format!(
@@ -520,6 +555,10 @@ impl eframe::App for ProcessManagerApp {
                     if ui.button("Refresh").clicked() {
                         self.refresh_processes();
                     }
+                    ui.separator();
+                    if ui.button("Create Process...").clicked() {
+                        self.show_create_process = true;
+                    }
                     if ui.button("Exit").clicked() {
                         std::process::exit(0);
                     }
@@ -619,6 +658,77 @@ impl eframe::App for ProcessManagerApp {
                     if ui.button("Close").clicked() {
                         self.show_threshold_config = false;
                     }
+                });
+        }
+
+        // Create Process window
+        if self.show_create_process {
+            egui::Window::new("Create Process")
+                .collapsible(false)
+                .show(ctx, |ui| {
+                    ui.label("Create a new process:");
+                    ui.separator();
+
+                    ui.horizontal(|ui| {
+                        ui.label("Command:");
+                        ui.text_edit_singleline(&mut self.create_process_command);
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Arguments:");
+                        ui.text_edit_singleline(&mut self.create_process_args);
+                    });
+
+                    ui.checkbox(&mut self.create_process_background, "Run in background");
+
+                    ui.separator();
+
+                    ui.horizontal(|ui| {
+                        if ui.button("Create").clicked() {
+                            if !self.create_process_command.is_empty() {
+                                let args: Vec<&str> = if self.create_process_args.is_empty() {
+                                    vec![]
+                                } else {
+                                    self.create_process_args.split_whitespace().collect()
+                                };
+                                
+                                let result = if self.create_process_background {
+                                    creation::create_process_background(&self.manager, &self.create_process_command, &args)
+                                } else {
+                                    match creation::create_process_foreground(&self.manager, &self.create_process_command, &args) {
+                                        Ok(_) => Ok(0),
+                                        Err(e) => Err(e),
+                                    }
+                                };
+                                
+                                match result {
+                                    Ok(pid) => {
+                                        if self.create_process_background {
+                                            self.success_message = Some(format!("Process created in background with PID: {}", pid));
+                                        } else {
+                                            self.success_message = Some("Process completed successfully".to_string());
+                                        }
+                                        self.success_message_time = Some(Instant::now());
+                                        self.create_process_command.clear();
+                                        self.create_process_args.clear();
+                                        self.show_create_process = false;
+                                        self.refresh_processes();
+                                    }
+                                    Err(e) => {
+                                        self.error_message = Some(format!("Failed to create process: {}", e));
+                                    }
+                                }
+                            } else {
+                                self.error_message = Some("Command cannot be empty".to_string());
+                            }
+                        }
+                        
+                        if ui.button("Cancel").clicked() {
+                            self.show_create_process = false;
+                            self.create_process_command.clear();
+                            self.create_process_args.clear();
+                        }
+                    });
                 });
         }
 
@@ -867,6 +977,29 @@ impl eframe::App for ProcessManagerApp {
                                     self.apply_filters_and_sort();
                                 }
 
+                                // Timer/Uptime column
+                                if ui
+                                    .selectable_label(
+                                        self.sort_column == SortColumn::Timer,
+                                        RichText::new("Timer")
+                                            .strong()
+                                            .color(if self.sort_column == SortColumn::Timer {
+                                                Color32::YELLOW
+                                            } else {
+                                                Color32::WHITE
+                                            }),
+                                    )
+                                    .clicked()
+                                {
+                                    if self.sort_column == SortColumn::Timer {
+                                        self.sort_ascending = !self.sort_ascending;
+                                    } else {
+                                        self.sort_column = SortColumn::Timer;
+                                        self.sort_ascending = true;
+                                    }
+                                    self.apply_filters_and_sort();
+                                }
+
                                 ui.end_row();
 
                                 // Data rows
@@ -940,6 +1073,9 @@ impl eframe::App for ProcessManagerApp {
                                     // Priority column
                                     ui.label(process.pcb_data.priority.to_string());
 
+                                    // Timer/Uptime column
+                                    ui.label(process.format_uptime());
+
                                     ui.end_row();
                                 }
                                 
@@ -976,6 +1112,7 @@ impl eframe::App for ProcessManagerApp {
                             p.pcb_data.memory_rss_mb,
                             p.pcb_data.priority,
                             p.pcb_data.cpu_percent,
+                            p.pcb_data.uptime_seconds,
                             self.get_abnormality_reason(p),
                         )
                     })
@@ -984,7 +1121,7 @@ impl eframe::App for ProcessManagerApp {
                 ui.heading("Process Details & Actions");
                 ui.separator();
                 
-                if let Some((process_pid, process_name, user_id, parent_id, state, memory, priority, cpu, abnormality_reason)) = process_data {
+                if let Some((process_pid, process_name, user_id, parent_id, state, memory, priority, cpu, uptime, abnormality_reason)) = process_data {
                     // Details section
                     ui.label(
                         RichText::new("Details")
@@ -1037,6 +1174,21 @@ impl eframe::App for ProcessManagerApp {
 
                             ui.label("CPU %:");
                             ui.label(format!("{:.2}%", cpu));
+                            ui.end_row();
+
+                            ui.label("Uptime:");
+                            // Format uptime nicely
+                            let hours = uptime / 3600;
+                            let minutes = (uptime % 3600) / 60;
+                            let secs = uptime % 60;
+                            let uptime_str = if hours > 0 {
+                                format!("{}h {}m {}s", hours, minutes, secs)
+                            } else if minutes > 0 {
+                                format!("{}m {}s", minutes, secs)
+                            } else {
+                                format!("{}s", secs)
+                            };
+                            ui.label(uptime_str);
                             ui.end_row();
 
                             // Show abnormality reason if any
