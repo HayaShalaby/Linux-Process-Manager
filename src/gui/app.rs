@@ -798,7 +798,15 @@ impl eframe::App for ProcessManagerApp {
                 }
 
                 ui.separator();
+            });
+        });
 
+        // Bottom panel for process details - always visible
+        egui::TopBottomPanel::bottom("details_panel")
+            .resizable(true)
+            .min_height(200.0)
+            .default_height(300.0)
+            .show(ctx, |ui| {
                 // Process details and actions panel
                 // Copy the selected PID and process data to avoid borrowing conflicts
                 let selected_pid = self.selected_pid;
@@ -963,6 +971,5 @@ impl eframe::App for ProcessManagerApp {
                     ui.label("Select a process to view details and perform actions");
                 }
             });
-        });
     }
 }
