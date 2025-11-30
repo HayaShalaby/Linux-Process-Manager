@@ -5,14 +5,24 @@
 # Fork a child process that exits immediately
 # Parent sleeps without calling wait(), leaving child as zombie
 (
-    # Child process - exits immediately
+    # Child process - exits immediately (becomes zombie)
     exit 0
 ) &
 
+# Store the child PID
+CHILD_PID=$!
+
 # Parent process sleeps, not calling wait()
-# The child becomes a zombie
-echo "Created zombie process. PID: $!"
-echo "The child process will be a zombie until this script exits or calls wait"
+# The child becomes a zombie immediately after exiting
+echo "Created zombie process. PID: $CHILD_PID"
+echo "The child process has exited and is now a ZOMBIE (state 'Z')"
+echo "Check it in Process Manager - it should show state 'Z'"
+echo ""
+echo "The zombie will remain until:"
+echo "  - This script exits (Ctrl+C)"
+echo "  - This script calls 'wait'"
+echo "  - System cleans it up"
+echo ""
 echo "Press Ctrl+C to exit and clean up the zombie"
 sleep 60
 
