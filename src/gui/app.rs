@@ -229,51 +229,110 @@ impl ProcessManagerApp {
         self.manager.build_process_tree()
     }
 
-    /// Render process tree node recursively
-    fn render_tree_node(&mut self, ui: &mut egui::Ui, node: &ProcessNode, depth: usize) {
-        let indent = "  ".repeat(depth);
+    /// Render process tree node recursively with beautiful tree visualization
+    fn render_tree_node(&mut self, ui: &mut egui::Ui, node: &ProcessNode, depth: usize, is_last: bool, prefix: String) {
         let process = &node.process;
         let is_abnormal = self.is_abnormal(process);
         let is_selected = self.selected_pids.contains(&process.process_id);
+        let has_children = !node.children.is_empty();
+
+        // Build tree connector
+        let connector = if depth == 0 {
+            "🌳 ".to_string() // Root process
+        } else if is_last {
+            format!("{}└─ ", prefix)
+        } else {
+            format!("{}├─ ", prefix)
+        };
+
+        // Build continuation prefix for children
+        let child_prefix = if depth == 0 {
+            String::new()
+        } else if is_last {
+            format!("{}   ", prefix) // Empty space for last child's children
+        } else {
+            format!("{}│  ", prefix) // Vertical line for non-last children
+        };
 
         ui.horizontal(|ui| {
+            // Tree connector with styling
+            ui.label(
+                RichText::new(&connector)
+                    .color(if depth == 0 { Color32::from_rgb(139, 69, 19) } else { Color32::GRAY })
+                    .monospace()
+            );
+
             // Checkbox for batch selection
             let mut checked = is_selected;
             if ui.checkbox(&mut checked, "").changed() {
                 self.toggle_selection(process.process_id);
             }
 
-            // Process info with color coding
+            // Process info with better formatting
             let name_color = if is_abnormal {
                 Color32::YELLOW
+            } else if depth == 0 {
+                Color32::from_rgb(100, 200, 100) // Light green for root
             } else {
                 Color32::WHITE
             };
 
-            let process_text = format!(
-                "{}├─ PID: {} | {} | State: {} | CPU: {:.1}% | Mem: {:.1} MB",
-                indent,
-                process.process_id,
-                process.name,
-                process.pcb_data.state,
-                process.pcb_data.cpu_percent,
-                process.pcb_data.memory_rss_mb
-            );
+            // State color
+            let state_color = match process.pcb_data.state {
+                'R' => Color32::GREEN,
+                'S' => Color32::BLUE,
+                'D' => Color32::RED,
+                'Z' => Color32::YELLOW,
+                'T' => Color32::GRAY,
+                _ => Color32::WHITE,
+            };
 
-            if ui
-                .selectable_label(
-                    self.selected_pid == Some(process.process_id),
-                    RichText::new(process_text).color(name_color),
-                )
-                .clicked()
-            {
+            // Build process display text
+            let pid_text = RichText::new(format!("PID:{}", process.process_id))
+                .strong()
+                .color(Color32::from_rgb(100, 150, 255));
+            
+            let name_text = RichText::new(&process.name)
+                .color(name_color)
+                .strong();
+            
+            let state_text = RichText::new(format!("[{}]", process.pcb_data.state))
+                .color(state_color)
+                .monospace();
+            
+            let mem_text = RichText::new(format!("{:.1}MB", process.pcb_data.memory_rss_mb))
+                .color(Color32::from_rgb(255, 200, 100));
+
+            // Display process info
+            ui.horizontal(|ui| {
+                ui.label(pid_text);
+                ui.label(" • ");
+                ui.label(name_text);
+                ui.label(" • ");
+                ui.label(state_text);
+                ui.label(" • ");
+                ui.label(mem_text);
+                
+                if has_children {
+                    ui.label(
+                        RichText::new(format!(" ({} children)", node.children.len()))
+                            .color(Color32::from_rgb(150, 150, 150))
+                            .small()
+                    );
+                }
+            });
+
+            // Make the whole row clickable
+            if ui.interact(ui.available_rect(), egui::Id::new(process.process_id), egui::Sense::click()).clicked() {
                 self.selected_pid = Some(process.process_id);
             }
         });
 
-        // Render children
-        for child in &node.children {
-            self.render_tree_node(ui, child, depth + 1);
+        // Render children with proper tree structure
+        let child_count = node.children.len();
+        for (idx, child) in node.children.iter().enumerate() {
+            let is_last_child = idx == child_count - 1;
+            self.render_tree_node(ui, child, depth + 1, is_last_child, child_prefix.clone());
         }
     }
 
@@ -545,10 +604,17 @@ impl eframe::App for ProcessManagerApp {
 
                 // Process tree view or table view
                 if self.show_tree_view {
-                    // Tree view
+                    // Tree view with beautiful visualization
+                    ui.label(
+                        RichText::new("🌲 Process Tree View")
+                            .strong()
+                            .color(Color32::from_rgb(100, 200, 100))
+                            .size(16.0)
+                    );
+                    ui.separator();
                     ScrollArea::vertical().show(ui, |ui| {
                         if let Some(root) = self.build_process_tree() {
-                            self.render_tree_node(ui, &root, 0);
+                            self.render_tree_node(ui, &root, 0, true, String::new());
                         } else {
                             ui.label("Failed to build process tree");
                         }
