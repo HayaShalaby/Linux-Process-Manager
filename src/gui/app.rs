@@ -223,10 +223,50 @@ impl ProcessManagerApp {
         }
     }
 
-    /// Build process tree structure using Manager
+    /// Build process tree structure using Manager, optionally filtered by search
     fn build_process_tree(&self) -> Option<ProcessNode> {
         // Use Manager's build_process_tree method
-        self.manager.build_process_tree()
+        let tree = self.manager.build_process_tree()?;
+        
+        // If search filter is active, filter the tree
+        if !self.search_filter.is_empty() {
+            Some(self.filter_tree(&tree))
+        } else {
+            Some(tree)
+        }
+    }
+    
+    /// Filter tree to only include processes matching search criteria
+    fn filter_tree(&self, node: &ProcessNode) -> ProcessNode {
+        use crate::process::tree::ProcessNode;
+        let process = &node.process;
+        let filter_lower = self.search_filter.to_lowercase();
+        let matches = process.name.to_lowercase().contains(&filter_lower)
+            || process.process_id.to_string().contains(&filter_lower)
+            || process.user_id.to_string().contains(&filter_lower);
+        
+        // Filter children first
+        let mut filtered_children: Vec<ProcessNode> = node.children
+            .iter()
+            .map(|child| self.filter_tree(child))
+            .filter(|child| {
+                // Keep if child matches or has matching descendants
+                let child_matches = child.process.name.to_lowercase().contains(&filter_lower)
+                    || child.process.process_id.to_string().contains(&filter_lower)
+                    || child.process.user_id.to_string().contains(&filter_lower);
+                child_matches || !child.children.is_empty()
+            })
+            .collect();
+        
+        // If this node matches or has matching children, include it
+        if matches || !filtered_children.is_empty() {
+            let mut filtered_node = ProcessNode::new(process.clone());
+            filtered_node.children = filtered_children;
+            filtered_node
+        } else {
+            // Return empty node (will be filtered out)
+            ProcessNode::new(process.clone())
+        }
     }
 
     /// Render process tree node recursively with beautiful tree visualization
@@ -615,20 +655,44 @@ impl eframe::App for ProcessManagerApp {
                 // Process tree view or table view
                 if self.show_tree_view {
                     // Tree view with beautiful visualization
-                    ui.label(
-                        RichText::new("🌲 Process Tree View")
-                            .strong()
-                            .color(Color32::from_rgb(100, 200, 100))
-                            .size(16.0)
-                    );
-                    ui.separator();
-                    ScrollArea::vertical().show(ui, |ui| {
-                        if let Some(root) = self.build_process_tree() {
-                            self.render_tree_node(ui, &root, 0, true, String::new());
-                        } else {
-                            ui.label("Failed to build process tree");
+                    ui.horizontal(|ui| {
+                        ui.label(
+                            RichText::new("🌲 Process Tree View")
+                                .strong()
+                                .color(Color32::from_rgb(100, 200, 100))
+                                .size(16.0)
+                        );
+                        if !self.search_filter.is_empty() {
+                            ui.label(
+                                RichText::new(format!("(Filtered: '{}')", self.search_filter))
+                                    .color(Color32::from_rgb(150, 150, 150))
+                                    .small()
+                            );
                         }
                     });
+                    ui.separator();
+                    ScrollArea::vertical()
+                        .auto_shrink([false, false])
+                        .show(ui, |ui| {
+                            if let Some(root) = self.build_process_tree() {
+                                // Check if tree has any content after filtering
+                                if !self.search_filter.is_empty() {
+                                    let filter_lower = self.search_filter.to_lowercase();
+                                    let root_matches = root.process.name.to_lowercase().contains(&filter_lower)
+                                        || root.process.process_id.to_string().contains(&filter_lower)
+                                        || root.process.user_id.to_string().contains(&filter_lower);
+                                    if !root_matches && root.children.is_empty() {
+                                        ui.label("No processes match the search filter");
+                                    } else {
+                                        self.render_tree_node(ui, &root, 0, true, String::new());
+                                    }
+                                } else {
+                                    self.render_tree_node(ui, &root, 0, true, String::new());
+                                }
+                            } else {
+                                ui.label("Failed to build process tree");
+                            }
+                        });
                 } else {
                     // Table view
                     ScrollArea::vertical().show(ui, |ui| {
@@ -890,12 +954,13 @@ impl eframe::App for ProcessManagerApp {
             });
         });
 
-        // Bottom panel for process details - always visible
+        // Bottom panel for process details - always visible and resizable
+        // The panel automatically reserves space, preventing overlap with scrollable content
         egui::TopBottomPanel::bottom("details_panel")
             .resizable(true)
             .min_height(200.0)
             .default_height(300.0)
-            .show(ctx, |ui| {
+            .show_animated(ctx, true, |ui| {
                 // Process details and actions panel
                 // Copy the selected PID and process data to avoid borrowing conflicts
                 let selected_pid = self.selected_pid;
