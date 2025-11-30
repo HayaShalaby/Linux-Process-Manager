@@ -37,6 +37,7 @@ pub struct ProcessManagerApp {
     selected_pids: HashSet<u32>, // For batch operations
     error_message: Option<String>,
     success_message: Option<String>,
+    success_message_time: Option<Instant>, // Track when success message was set
     auto_refresh: bool,
     show_tree_view: bool,
     show_threshold_config: bool,
@@ -82,6 +83,7 @@ impl Default for ProcessManagerApp {
             selected_pids: HashSet::new(),
             error_message: None,
             success_message: None,
+            success_message_time: None,
             auto_refresh: true,
             show_tree_view: false,
             show_threshold_config: false,
@@ -101,7 +103,7 @@ impl ProcessManagerApp {
     /// Refresh the process list from /proc filesystem using Manager
     fn refresh_processes(&mut self) {
         self.error_message = None;
-        self.success_message = None;
+        // Note: Don't clear success_message here - let it persist so user can see it
         
         // Use Manager's refresh method
         match self.manager.refresh() {
@@ -322,6 +324,7 @@ impl ProcessManagerApp {
                 if force { "killed" } else { "terminated" },
                 successful
             ));
+            self.success_message_time = Some(Instant::now());
         } else {
             self.error_message = Some(format!(
                 "{} {} process(es), {} failed",
@@ -349,6 +352,7 @@ impl ProcessManagerApp {
         
         if failed == 0 {
             self.success_message = Some(format!("Successfully paused {} process(es)", successful));
+            self.success_message_time = Some(Instant::now());
         } else {
             self.error_message = Some(format!("Paused {} process(es), {} failed", successful, failed));
         }
@@ -371,6 +375,7 @@ impl ProcessManagerApp {
         
         if failed == 0 {
             self.success_message = Some(format!("Successfully resumed {} process(es)", successful));
+            self.success_message_time = Some(Instant::now());
         } else {
             self.error_message = Some(format!("Resumed {} process(es), {} failed", successful, failed));
         }
@@ -383,6 +388,14 @@ impl eframe::App for ProcessManagerApp {
         // Auto-refresh logic
         if self.auto_refresh && self.last_refresh.elapsed() >= self.refresh_interval {
             self.refresh_processes();
+        }
+        
+        // Clear success message after 3 seconds
+        if let Some(msg_time) = self.success_message_time {
+            if msg_time.elapsed().as_secs() >= 3 {
+                self.success_message = None;
+                self.success_message_time = None;
+            }
         }
 
         // Request repaint for auto-refresh
@@ -897,6 +910,7 @@ impl eframe::App for ProcessManagerApp {
                                         match self.kill_process(process_pid) {
                                             Ok(_) => {
                                                 self.success_message = Some(format!("Killed process {}", process_pid));
+                                                self.success_message_time = Some(Instant::now());
                                                 self.refresh_processes();
                                             }
                                             Err(e) => self.error_message = Some(e),
@@ -907,6 +921,7 @@ impl eframe::App for ProcessManagerApp {
                                         match self.kill_process(process_pid) {
                                             Ok(_) => {
                                                 self.success_message = Some(format!("Force killed process {}", process_pid));
+                                                self.success_message_time = Some(Instant::now());
                                                 self.refresh_processes();
                                             }
                                             Err(e) => self.error_message = Some(e),
@@ -917,6 +932,7 @@ impl eframe::App for ProcessManagerApp {
                                         match self.terminate_process(process_pid) {
                                             Ok(_) => {
                                                 self.success_message = Some(format!("Terminated process {}", process_pid));
+                                                self.success_message_time = Some(Instant::now());
                                                 self.refresh_processes();
                                             }
                                             Err(e) => self.error_message = Some(e),
@@ -927,6 +943,7 @@ impl eframe::App for ProcessManagerApp {
                                         match self.pause_process(process_pid) {
                                             Ok(_) => {
                                                 self.success_message = Some(format!("Paused process {}", process_pid));
+                                                self.success_message_time = Some(Instant::now());
                                                 self.refresh_processes();
                                             }
                                             Err(e) => self.error_message = Some(e),
@@ -937,6 +954,7 @@ impl eframe::App for ProcessManagerApp {
                                         match self.resume_process(process_pid) {
                                             Ok(_) => {
                                                 self.success_message = Some(format!("Resumed process {}", process_pid));
+                                                self.success_message_time = Some(Instant::now());
                                                 self.refresh_processes();
                                             }
                                             Err(e) => self.error_message = Some(e),
@@ -954,6 +972,7 @@ impl eframe::App for ProcessManagerApp {
                                                 match self.set_priority(process_pid, nice) {
                                                     Ok(_) => {
                                                         self.success_message = Some(format!("Set priority {} for process {}", nice, process_pid));
+                                                        self.success_message_time = Some(Instant::now());
                                                         self.priority_input.clear();
                                                         self.refresh_processes();
                                                     }
