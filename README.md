@@ -55,9 +55,6 @@ sudo apt-get install -y \
 git clone https://github.com/HayaShalaby/Linux-Process-Manager.git
 cd Linux-Process-Manager
 
-# Switch to the RefaiGUI branch (or TLI-GUI branch)
-git checkout RefaiGUI
-
 # Build the project
 cargo build --release
 ```
@@ -126,13 +123,6 @@ src/
     ├── mod.rs       # GUI module exports
     └── app.rs       # Main GUI application logic with all features
 ```
-
-## Branches
-
-- `main`: Main development branch
-- `backend--Ismaiel`: Backend implementation by Ismail
-- `RefaiGUI`: Complete GUI implementation with all checklist features (Refai)
-- `TLI-GUI`: GUI (Text/Linux Interface) implementation
 
 ## Development
 
@@ -207,10 +197,6 @@ cargo fmt
 
 - Ensure Rust is up to date: `rustup update`
 - Clean and rebuild: `cargo clean && cargo build --release`
-
-## License
-
-See LICENSE file for details.
 
 ## Contributors
 
