@@ -78,6 +78,11 @@ cargo run --release
 Watch the project demo video:
 - [Project Demo Video](https://drive.google.com/file/d/1rOonjtb3V5uYefNyozDfy0VHUV92EVXm/view?usp=share_link)
 
+## Project Report
+
+Read the detailed project report:
+- [Project Report](https://docs.google.com/document/d/10aG-ECqWrKKxkOioYXx-f3QD5gQ6YEUhPlHxJkeYzR4/edit?usp=sharing)
+
 ## Usage
 
 1. **View Processes**: The main window displays all running processes in a sortable table
