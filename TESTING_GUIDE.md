@@ -136,6 +136,53 @@
 - [ ] Zombie processes should be highlighted in **YELLOW**
 - [ ] Click on zombie → warning message in details panel
 
+**Test: CPU Percentage Calculation** 🆕
+1. **Initial State Check:**
+   - [ ] Open the application
+   - [ ] Wait for first refresh cycle (2 seconds)
+   - [ ] Check CPU % column - should show 0.0% for all processes initially
+   - [ ] This is normal - CPU calculation needs 2 refresh cycles
+
+2. **After Second Refresh:**
+   - [ ] Wait for second auto-refresh (another 2 seconds)
+   - [ ] CPU % column should now show real values (not all 0.0)
+   - [ ] Most processes should show low CPU (< 5%)
+   - [ ] Some processes may show 0.0% if they're idle
+
+3. **Create High CPU Process:**
+   ```bash
+   # In a terminal, run this to create a CPU-intensive process:
+   while true; do : ; done &
+   # Note the PID that appears
+   ```
+   - [ ] Find the process in the manager (search for "bash" or the PID)
+   - [ ] Wait for 2 refresh cycles
+   - [ ] CPU % should show a high value (50-100% depending on cores)
+   - [ ] Process should be highlighted in RED if it exceeds threshold
+
+4. **Test CPU Calculation Accuracy:**
+   ```bash
+   # Create a controlled CPU load (uses 1 CPU core at 100%)
+   stress-ng --cpu 1 --timeout 30s &
+   # OR if stress-ng not available:
+   yes > /dev/null &
+   ```
+   - [ ] Find the process in the manager
+   - [ ] Wait for 2 refresh cycles
+   - [ ] CPU % should be close to (100% / number_of_cores)
+   - [ ] For example: 100% on 1-core system, ~50% on 2-core, ~25% on 4-core
+
+5. **Verify CPU Updates:**
+   - [ ] Watch a process with CPU usage
+   - [ ] CPU % should update every refresh cycle (every 2 seconds)
+   - [ ] Values should change as process activity changes
+
+6. **Test CPU Sorting:**
+   - [ ] Click "CPU %" column header
+   - [ ] Processes should sort by CPU usage (highest first or lowest first)
+   - [ ] Click again to reverse order
+   - [ ] High CPU processes should be at top/bottom depending on sort
+
 **Test: Resource Thresholds**
 1. Go to **View → Configure Thresholds**
 2. Set CPU threshold to 50%
@@ -144,6 +191,7 @@
 5. [ ] Processes exceeding thresholds highlighted in **RED**
 6. [ ] CPU column shows red for high CPU processes
 7. [ ] Memory column shows red for high memory processes
+8. [ ] Create a high CPU process (see above) → should turn red when threshold exceeded
 
 **Test: Color-Coded States**
 - [ ] **Green (R)** = Running processes
