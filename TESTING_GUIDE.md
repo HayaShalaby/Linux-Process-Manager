@@ -136,6 +136,40 @@
 - [ ] Zombie processes should be highlighted in **YELLOW**
 - [ ] Click on zombie → warning message in details panel
 
+**Test: Creating Zombie Processes for Testing** 🆕
+If you don't have any zombie processes, you can create one for testing:
+
+**Method 1: Using the provided script**
+```bash
+# Run the create_zombie.sh script
+./create_zombie.sh
+# Keep it running in a terminal
+# The child process will be a zombie
+```
+
+**Method 2: Manual creation**
+```bash
+# In a terminal, run:
+(sleep 1 &) && sleep 60
+# The sleep 1 process becomes a zombie while parent sleeps
+```
+
+**Method 3: Using the Process Manager**
+1. Create a background process: **File → Create Process...**
+   - Command: `sleep`
+   - Args: `1`
+   - Check "Run in background"
+   - Click "Create"
+2. Immediately kill the parent shell process (if possible)
+3. Or use a script that doesn't wait for children
+
+**After creating a zombie:**
+- [ ] Open Process Manager
+- [ ] Enable **View → Show Only Zombie Processes**
+- [ ] Should see the zombie process with state 'Z'
+- [ ] Process name should be highlighted in yellow
+- [ ] Click on it → details panel shows "Zombie process" warning
+
 **Test: CPU Percentage Calculation** 🆕
 1. **Initial State Check:**
    - [ ] Open the application
@@ -182,6 +216,100 @@
    - [ ] Processes should sort by CPU usage (highest first or lowest first)
    - [ ] Click again to reverse order
    - [ ] High CPU processes should be at top/bottom depending on sort
+
+**Test: Process Timer/Uptime** 🆕
+1. **Check Timer Column:**
+   - [ ] Open the application
+   - [ ] Look for "Timer" column in the process table
+   - [ ] Timer should show process runtime (e.g., "1h 23m 45s", "5m 30s", "30s")
+   - [ ] Timer updates automatically on each refresh
+
+2. **Test Timer Sorting:**
+   - [ ] Click on "Timer" column header
+   - [ ] Processes should sort by uptime (oldest first or newest first)
+   - [ ] Click again to reverse sort order
+
+3. **Check Timer in Details Panel:**
+   - [ ] Click on any process
+   - [ ] In the right-side details panel, look for "Uptime:" field
+   - [ ] Should show the same formatted uptime (e.g., "2h 15m 30s")
+
+4. **Verify Timer Accuracy:**
+   ```bash
+   # In a terminal, start a process and note the time
+   sleep 120 &
+   # Note the PID
+   ```
+   - [ ] Find the process in the manager
+   - [ ] Timer should show approximately the elapsed time
+   - [ ] Wait a bit and refresh → timer should increase
+
+**Test: Process Creation** 🆕
+1. **Create Process in Foreground:**
+   - [ ] Go to **File → Create Process...**
+   - [ ] Enter command: `sleep`
+   - [ ] Enter arguments: `5`
+   - [ ] Make sure "Run in background" is **unchecked**
+   - [ ] Click "Create"
+   - [ ] Application should wait ~5 seconds (blocking)
+   - [ ] Success message should appear: "Process completed successfully"
+
+2. **Create Process in Background:**
+   - [ ] Go to **File → Create Process...**
+   - [ ] Enter command: `sleep`
+   - [ ] Enter arguments: `60`
+   - [ ] **Check** "Run in background"
+   - [ ] Click "Create"
+   - [ ] Success message should show: "Process created in background with PID: XXXX"
+   - [ ] Application should NOT block (returns immediately)
+   - [ ] Refresh the process list
+   - [ ] Find the process by PID or search for "sleep"
+   - [ ] Process should appear in the list
+
+3. **Test Different Commands:**
+   ```bash
+   # Try creating different processes:
+   ```
+   - [ ] Command: `echo`, Args: `"Hello World"` (foreground) → should complete quickly
+   - [ ] Command: `yes`, Args: `>/dev/null` (background) → should create a high CPU process
+   - [ ] Command: `ls`, Args: `-la /tmp` (foreground) → should show output and complete
+
+4. **Test Error Handling:**
+   - [ ] Try creating a non-existent command: `nonexistentcommand`
+   - [ ] Should show error: "Failed to create process: ..."
+   - [ ] Try with empty command → should show "Command cannot be empty"
+
+5. **Verify Created Processes:**
+   - [ ] After creating background processes, refresh the list
+   - [ ] Created processes should appear with their PIDs
+   - [ ] You can select and manage them (kill, pause, etc.)
+
+**Test: Deadlock Detection** 🆕
+1. **Understanding Deadlock Detection:**
+   - Deadlock detection flags processes in uninterruptible sleep (D state) for >30 seconds
+   - This is a heuristic - real deadlocks are complex to detect
+
+2. **Check for Existing Deadlocked Processes:**
+   - [ ] Look through the process list
+   - [ ] Processes with state 'D' (Disk sleep) that have been running >30 seconds
+   - [ ] Should be highlighted in **YELLOW** (abnormal)
+   - [ ] Click on such a process
+   - [ ] Details panel should show warning: "Possible deadlock (uninterruptible sleep for Xs)"
+
+3. **Create a Test Scenario (if possible):**
+   ```bash
+   # This is tricky - deadlocks are hard to create intentionally
+   # But you can look for processes stuck in D state:
+   # Check processes that are waiting on I/O
+   ```
+   - [ ] Look for processes in D state (usually I/O operations)
+   - [ ] If any have been running >30 seconds, they should be flagged
+   - [ ] Check the abnormality reason in details panel
+
+4. **Verify Deadlock Warning:**
+   - [ ] Find a process with state 'D' and uptime >30s
+   - [ ] Should show in details: "⚠️ Warning: Possible deadlock (uninterruptible sleep for Xs)"
+   - [ ] Process should be marked as abnormal (yellow highlight)
 
 **Test: Resource Thresholds**
 1. Go to **View → Configure Thresholds**

@@ -148,23 +148,24 @@ cargo fmt
 
 ### Currently Not Implemented
 
-1. **Process Timer/Uptime**
-   - Process runtime/uptime is not displayed
-   - Would require tracking process start time from `/proc/[pid]/stat`
+None! All features from the functional requirements checklist are now implemented.
 
 ### Fully Implemented Features
 
 ✅ Process listing and display  
 ✅ Process search and filtering  
-✅ Sorting by all columns (PID, Name, UID, State, CPU, Memory, Priority)  
+✅ Sorting by all columns (PID, Name, UID, State, CPU, Memory, Priority, Timer)  
 ✅ Process tree view  
 ✅ **CPU percentage calculation** - Real-time CPU usage tracking with proper jiffies-to-percentage conversion  
+✅ **Process Timer/Uptime** - Process runtime display in human-readable format (hours, minutes, seconds)  
 ✅ Memory usage calculation and display  
 ✅ Process state detection and color coding  
 ✅ Zombie process detection  
+✅ **Deadlock detection** - Heuristic detection of processes stuck in uninterruptible sleep  
 ✅ CPU and memory threshold monitoring with visual indicators  
 ✅ Memory threshold monitoring  
 ✅ Process operations (kill, terminate, pause, resume, set priority)  
+✅ **Process creation** - Create processes in foreground or background execution modes  
 ✅ Batch operations  
 ✅ Permission system (Admin required for operations)  
 ✅ Auto-refresh functionality  

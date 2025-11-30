@@ -7,6 +7,7 @@ pub mod batch;
 pub mod monitoring;
 pub mod operations;
 pub mod permissions;
+pub mod creation;
 
 
 #[derive(Debug)] //Allows an instance of the Manager struct to be formatted for debugging output in a human-readable way.
