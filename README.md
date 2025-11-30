@@ -122,12 +122,12 @@ src/
 ├── process/         # Process data structures and parsing
 │   ├── mod.rs       # Process struct and TryFrom implementation
 │   ├── pcb.rs       # Process Control Block data (CPU, memory, state, priority)
-│   ├── tree.rs      # Process tree structure for parent-child relationships
-│   └── scheduler.rs # Placeholder for scheduler module
+│   └── tree.rs      # Process tree structure for parent-child relationships
 ├── manager/         # Process management operations (Ismail's backend)
 │   ├── operations.rs    # Process operations: kill, terminate, pause, resume, set_priority
 │   ├── batch.rs         # Batch operations and process tree building
 │   ├── monitoring.rs    # Process monitoring and refresh functionality
+│   ├── creation.rs      # Process creation (foreground/background modes)
 │   └── permissions.rs   # Permission checking (Admin required)
 └── gui/             # GUI application (TLI - Refai's implementation)
     ├── mod.rs       # GUI module exports
