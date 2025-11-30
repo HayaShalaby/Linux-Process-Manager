@@ -136,6 +136,40 @@
 - [ ] Zombie processes should be highlighted in **YELLOW**
 - [ ] Click on zombie → warning message in details panel
 
+**Test: Creating Zombie Processes for Testing** 🆕
+If you don't have any zombie processes, you can create one for testing:
+
+**Method 1: Using the provided script**
+```bash
+# Run the create_zombie.sh script
+./create_zombie.sh
+# Keep it running in a terminal
+# The child process will be a zombie
+```
+
+**Method 2: Manual creation**
+```bash
+# In a terminal, run:
+(sleep 1 &) && sleep 60
+# The sleep 1 process becomes a zombie while parent sleeps
+```
+
+**Method 3: Using the Process Manager**
+1. Create a background process: **File → Create Process...**
+   - Command: `sleep`
+   - Args: `1`
+   - Check "Run in background"
+   - Click "Create"
+2. Immediately kill the parent shell process (if possible)
+3. Or use a script that doesn't wait for children
+
+**After creating a zombie:**
+- [ ] Open Process Manager
+- [ ] Enable **View → Show Only Zombie Processes**
+- [ ] Should see the zombie process with state 'Z'
+- [ ] Process name should be highlighted in yellow
+- [ ] Click on it → details panel shows "Zombie process" warning
+
 **Test: CPU Percentage Calculation** 🆕
 1. **Initial State Check:**
    - [ ] Open the application
