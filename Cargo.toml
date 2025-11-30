@@ -6,5 +6,6 @@ edition = "2024"
 [dependencies]
 procfs = "0.16" #The procfs crate is specifically designed to parse the Linux /proc filesystem efficiently.
 nix = "0.26"    # Used for process control (kill, set priority)
+libc = "0.2"    # Used for setpriority system call
 eframe = "0.27" # egui framework for GUI
 egui = "0.27"   # Immediate mode GUI library

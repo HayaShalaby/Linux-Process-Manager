@@ -2,10 +2,8 @@ use crate::process::Process;
 use crate::process::tree::ProcessNode;
 use crate::manager::Manager;
 use crate::manager::operations;
-use crate::manager::batch;
 use crate::user::{User, Privilege};
 use egui::{Color32, RichText, ScrollArea, TextEdit};
-use procfs::ProcError;
 use std::collections::{HashSet, HashMap};
 use std::time::{Duration, Instant};
 
@@ -61,7 +59,7 @@ impl Default for ProcessManagerApp {
     fn default() -> Self {
         // Create a default admin user for GUI
         let admin_user = User::new(0, "admin", Privilege::Admin);
-        let manager = Manager::new(admin_user).unwrap_or_else(|e| {
+        let manager = Manager::new(admin_user.clone()).unwrap_or_else(|e| {
             eprintln!("Failed to initialize manager: {}", e);
             // Create a minimal manager if initialization fails
             Manager {
@@ -805,7 +803,7 @@ impl eframe::App for ProcessManagerApp {
                 // Copy the selected PID and process data to avoid borrowing conflicts
                 let selected_pid = self.selected_pid;
                 let process_data = selected_pid.and_then(|pid| {
-                    self.processes.iter().find(|p| p.process_id == pid).map(|p| {
+                    self.processes_vec.iter().find(|p| p.process_id == pid).map(|p| {
                         (
                             p.process_id,
                             p.name.clone(),
