@@ -67,6 +67,7 @@ impl Default for ProcessManagerApp {
                 processes: HashMap::new(),
                 active_user: admin_user,
                 root_pid: 1,
+                previous_cpu_times: HashMap::new(),
             }
         });
         
@@ -246,7 +247,7 @@ impl ProcessManagerApp {
             || process.user_id.to_string().contains(&filter_lower);
         
         // Filter children first
-        let mut filtered_children: Vec<ProcessNode> = node.children
+        let filtered_children: Vec<ProcessNode> = node.children
             .iter()
             .map(|child| self.filter_tree(child))
             .filter(|child| {

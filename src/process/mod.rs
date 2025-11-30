@@ -56,3 +56,18 @@ impl TryFrom<u32> for Process {
         })
     }
 }
+
+impl Process {
+    /// Update the CPU percentage for this process
+    pub fn set_cpu_percent(&mut self, cpu_percent: f32) {
+        self.pcb_data.cpu_percent = cpu_percent;
+    }
+    
+    /// Get the total CPU time (utime + stime) in jiffies from /proc/[pid]/stat
+    pub fn get_cpu_time_jiffies(pid: u32) -> Result<u64, ProcError> {
+        let procfs_proc = ProcfsProcess::new(pid as i32)?;
+        let stat = procfs_proc.stat()?;
+        // Total CPU time = user time + system time (in jiffies)
+        Ok(stat.utime as u64 + stat.stime as u64)
+    }
+}
