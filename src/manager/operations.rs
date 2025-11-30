@@ -1,4 +1,4 @@
-use nix::sys::signal::Signal;
+use nix::sys::signal::{self, Signal};
 use nix::unistd::Pid;
 
 use libc::{setpriority, PRIO_PROCESS};
