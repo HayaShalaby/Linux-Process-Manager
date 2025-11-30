@@ -577,7 +577,9 @@ impl eframe::App for ProcessManagerApp {
                     ui.checkbox(&mut self.show_tree_view, "Process Tree View");
                     ui.checkbox(&mut self.show_threshold_config, "Configure Thresholds");
                     ui.separator();
-                    ui.checkbox(&mut self.show_only_zombies, "Show Only Zombie Processes");
+                    if ui.checkbox(&mut self.show_only_zombies, "Show Only Zombie Processes").changed() {
+                        self.apply_filters_and_sort();
+                    }
                     if self.show_only_zombies {
                         ui.label(
                             RichText::new("⚠️ Filtering to show only zombie processes")
