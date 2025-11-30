@@ -34,10 +34,11 @@ fn get_num_cores() -> f32 {
 /// This is typically 100 on most Linux systems, but can be 1000 on newer kernels
 fn get_hz() -> f64 {
     // Try to get from sysconf first (more reliable)
+    extern "C" {
+        fn sysconf(name: i32) -> i64;
+    }
+    
     unsafe {
-        extern "C" {
-            fn sysconf(name: i32) -> i64;
-        }
         // _SC_CLK_TCK = 2
         let hz = sysconf(2);
         if hz > 0 {
@@ -100,7 +101,7 @@ pub fn refresh_processes(
                             let cpu_time_seconds = delta_cpu_time as f64 / hz;
                             
                             if delta_wall_time > 0.0 {
-                                let cpu_percent = (cpu_time_seconds / delta_wall_time) * 100.0 / num_cores;
+                                let cpu_percent = (cpu_time_seconds / delta_wall_time) * 100.0 / num_cores as f64;
                                 proc.set_cpu_percent(cpu_percent as f32);
                             } else {
                                 proc.set_cpu_percent(0.0);
