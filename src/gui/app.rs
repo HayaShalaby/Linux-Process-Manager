@@ -954,13 +954,13 @@ impl eframe::App for ProcessManagerApp {
             });
         });
 
-        // Bottom panel for process details - always visible and resizable
-        // The panel automatically reserves space, preventing overlap with scrollable content
-        egui::TopBottomPanel::bottom("details_panel")
+        // Right side panel for process details - always visible and resizable
+        // This prevents overlap with the scrollable process list
+        egui::SidePanel::right("details_panel")
             .resizable(true)
-            .min_height(200.0)
-            .default_height(300.0)
-            .show_animated(ctx, true, |ui| {
+            .min_width(250.0)
+            .default_width(350.0)
+            .show(ctx, |ui| {
                 // Process details and actions panel
                 // Copy the selected PID and process data to avoid borrowing conflicts
                 let selected_pid = self.selected_pid;
@@ -980,153 +980,159 @@ impl eframe::App for ProcessManagerApp {
                     })
                 });
                 
+                ui.heading("Process Details & Actions");
+                ui.separator();
+                
                 if let Some((process_pid, process_name, user_id, parent_id, state, memory, priority, cpu, abnormality_reason)) = process_data {
-                    egui::CollapsingHeader::new("Process Details & Actions")
-                        .default_open(true)
+                    // Details section
+                    ui.label(
+                        RichText::new("Details")
+                            .strong()
+                            .size(14.0)
+                    );
+                    egui::Grid::new("process_details")
+                        .num_columns(2)
+                        .spacing([10.0, 4.0])
                         .show(ui, |ui| {
-                            ui.horizontal(|ui| {
-                                // Details
-                                egui::Grid::new("process_details")
-                                    .num_columns(2)
-                                    .spacing([20.0, 4.0])
-                                    .show(ui, |ui| {
-                                        ui.label("Process ID:");
-                                        ui.label(process_pid.to_string());
-                                        ui.end_row();
+                            ui.label("Process ID:");
+                            ui.label(process_pid.to_string());
+                            ui.end_row();
 
-                                        ui.label("Name:");
-                                        ui.label(&process_name);
-                                        ui.end_row();
+                            ui.label("Name:");
+                            ui.label(&process_name);
+                            ui.end_row();
 
-                                        ui.label("User ID:");
-                                        ui.label(user_id.to_string());
-                                        ui.end_row();
+                            ui.label("User ID:");
+                            ui.label(user_id.to_string());
+                            ui.end_row();
 
-                                        ui.label("Parent PID:");
-                                        ui.label(
-                                            parent_id
-                                                .map(|p| p.to_string())
-                                                .unwrap_or_else(|| "N/A".to_string()),
-                                        );
-                                        ui.end_row();
+                            ui.label("Parent PID:");
+                            ui.label(
+                                parent_id
+                                    .map(|p| p.to_string())
+                                    .unwrap_or_else(|| "N/A".to_string()),
+                            );
+                            ui.end_row();
 
-                                        ui.label("State:");
-                                        let state_color = match state {
-                                            'R' => Color32::GREEN,
-                                            'S' => Color32::BLUE,
-                                            'D' => Color32::RED,
-                                            'Z' => Color32::YELLOW,
-                                            'T' => Color32::GRAY,
-                                            _ => Color32::WHITE,
-                                        };
-                                        ui.colored_label(state_color, state.to_string());
-                                        ui.end_row();
+                            ui.label("State:");
+                            let state_color = match state {
+                                'R' => Color32::GREEN,
+                                'S' => Color32::BLUE,
+                                'D' => Color32::RED,
+                                'Z' => Color32::YELLOW,
+                                'T' => Color32::GRAY,
+                                _ => Color32::WHITE,
+                            };
+                            ui.colored_label(state_color, state.to_string());
+                            ui.end_row();
 
-                                        ui.label("Memory (RSS):");
-                                        ui.label(format!("{:.2} MB", memory));
-                                        ui.end_row();
+                            ui.label("Memory (RSS):");
+                            ui.label(format!("{:.2} MB", memory));
+                            ui.end_row();
 
-                                        ui.label("Priority (Nice):");
-                                        ui.label(priority.to_string());
-                                        ui.end_row();
+                            ui.label("Priority (Nice):");
+                            ui.label(priority.to_string());
+                            ui.end_row();
 
-                                        ui.label("CPU %:");
-                                        ui.label(format!("{:.2}%", cpu));
-                                        ui.end_row();
+                            ui.label("CPU %:");
+                            ui.label(format!("{:.2}%", cpu));
+                            ui.end_row();
 
-                                        // Show abnormality reason if any
-                                        if let Some(reason) = abnormality_reason {
-                                            ui.label("⚠️ Warning:");
-                                            ui.colored_label(Color32::YELLOW, reason);
-                                            ui.end_row();
-                                        }
-                                    });
-
-                                // Actions
-                                ui.vertical(|ui| {
-                                    ui.label("Actions:");
-                                    ui.separator();
-
-                                    if ui.button("Kill").clicked() {
-                                        match self.kill_process(process_pid) {
-                                            Ok(_) => {
-                                                self.success_message = Some(format!("Killed process {}", process_pid));
-                                                self.success_message_time = Some(Instant::now());
-                                                self.refresh_processes();
-                                            }
-                                            Err(e) => self.error_message = Some(e),
-                                        }
-                                    }
-
-                                    if ui.button("Force Kill").clicked() {
-                                        match self.kill_process(process_pid) {
-                                            Ok(_) => {
-                                                self.success_message = Some(format!("Force killed process {}", process_pid));
-                                                self.success_message_time = Some(Instant::now());
-                                                self.refresh_processes();
-                                            }
-                                            Err(e) => self.error_message = Some(e),
-                                        }
-                                    }
-                                    
-                                    if ui.button("Terminate").clicked() {
-                                        match self.terminate_process(process_pid) {
-                                            Ok(_) => {
-                                                self.success_message = Some(format!("Terminated process {}", process_pid));
-                                                self.success_message_time = Some(Instant::now());
-                                                self.refresh_processes();
-                                            }
-                                            Err(e) => self.error_message = Some(e),
-                                        }
-                                    }
-
-                                    if ui.button("Pause").clicked() {
-                                        match self.pause_process(process_pid) {
-                                            Ok(_) => {
-                                                self.success_message = Some(format!("Paused process {}", process_pid));
-                                                self.success_message_time = Some(Instant::now());
-                                                self.refresh_processes();
-                                            }
-                                            Err(e) => self.error_message = Some(e),
-                                        }
-                                    }
-
-                                    if ui.button("Resume").clicked() {
-                                        match self.resume_process(process_pid) {
-                                            Ok(_) => {
-                                                self.success_message = Some(format!("Resumed process {}", process_pid));
-                                                self.success_message_time = Some(Instant::now());
-                                                self.refresh_processes();
-                                            }
-                                            Err(e) => self.error_message = Some(e),
-                                        }
-                                    }
-
-                                    ui.separator();
-                                    ui.label("Set Priority (Nice):");
-                                    ui.horizontal(|ui| {
-                                        ui.add(TextEdit::singleline(&mut self.priority_input)
-                                            .desired_width(60.0)
-                                            .hint_text("-20 to 19"));
-                                        if ui.button("Apply").clicked() {
-                                            if let Ok(nice) = self.priority_input.parse::<i32>() {
-                                                match self.set_priority(process_pid, nice) {
-                                                    Ok(_) => {
-                                                        self.success_message = Some(format!("Set priority {} for process {}", nice, process_pid));
-                                                        self.success_message_time = Some(Instant::now());
-                                                        self.priority_input.clear();
-                                                        self.refresh_processes();
-                                                    }
-                                                    Err(e) => self.error_message = Some(e),
-                                                }
-                                            } else {
-                                                self.error_message = Some("Invalid priority value".to_string());
-                                            }
-                                        }
-                                    });
-                                });
-                            });
+                            // Show abnormality reason if any
+                            if let Some(reason) = abnormality_reason {
+                                ui.label("⚠️ Warning:");
+                                ui.colored_label(Color32::YELLOW, reason);
+                                ui.end_row();
+                            }
                         });
+
+                    ui.separator();
+                    
+                    // Actions section
+                    ui.label(
+                        RichText::new("Actions")
+                            .strong()
+                            .size(14.0)
+                    );
+                    ui.vertical(|ui| {
+                        if ui.button("Kill").clicked() {
+                            match self.kill_process(process_pid) {
+                                Ok(_) => {
+                                    self.success_message = Some(format!("Killed process {}", process_pid));
+                                    self.success_message_time = Some(Instant::now());
+                                    self.refresh_processes();
+                                }
+                                Err(e) => self.error_message = Some(e),
+                            }
+                        }
+
+                        if ui.button("Force Kill").clicked() {
+                            match self.kill_process(process_pid) {
+                                Ok(_) => {
+                                    self.success_message = Some(format!("Force killed process {}", process_pid));
+                                    self.success_message_time = Some(Instant::now());
+                                    self.refresh_processes();
+                                }
+                                Err(e) => self.error_message = Some(e),
+                            }
+                        }
+                        
+                        if ui.button("Terminate").clicked() {
+                            match self.terminate_process(process_pid) {
+                                Ok(_) => {
+                                    self.success_message = Some(format!("Terminated process {}", process_pid));
+                                    self.success_message_time = Some(Instant::now());
+                                    self.refresh_processes();
+                                }
+                                Err(e) => self.error_message = Some(e),
+                            }
+                        }
+
+                        if ui.button("Pause").clicked() {
+                            match self.pause_process(process_pid) {
+                                Ok(_) => {
+                                    self.success_message = Some(format!("Paused process {}", process_pid));
+                                    self.success_message_time = Some(Instant::now());
+                                    self.refresh_processes();
+                                }
+                                Err(e) => self.error_message = Some(e),
+                            }
+                        }
+
+                        if ui.button("Resume").clicked() {
+                            match self.resume_process(process_pid) {
+                                Ok(_) => {
+                                    self.success_message = Some(format!("Resumed process {}", process_pid));
+                                    self.success_message_time = Some(Instant::now());
+                                    self.refresh_processes();
+                                }
+                                Err(e) => self.error_message = Some(e),
+                            }
+                        }
+
+                        ui.separator();
+                        ui.label("Set Priority (Nice):");
+                        ui.horizontal(|ui| {
+                            ui.add(TextEdit::singleline(&mut self.priority_input)
+                                .desired_width(60.0)
+                                .hint_text("-20 to 19"));
+                            if ui.button("Apply").clicked() {
+                                if let Ok(nice) = self.priority_input.parse::<i32>() {
+                                    match self.set_priority(process_pid, nice) {
+                                        Ok(_) => {
+                                            self.success_message = Some(format!("Set priority {} for process {}", nice, process_pid));
+                                            self.success_message_time = Some(Instant::now());
+                                            self.priority_input.clear();
+                                            self.refresh_processes();
+                                        }
+                                        Err(e) => self.error_message = Some(e),
+                                    }
+                                } else {
+                                    self.error_message = Some("Invalid priority value".to_string());
+                                }
+                            }
+                        });
+                    });
                 } else {
                     ui.label("Select a process to view details and perform actions");
                 }
