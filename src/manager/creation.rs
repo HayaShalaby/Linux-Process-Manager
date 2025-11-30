@@ -37,19 +37,10 @@ pub fn create_process_background(manager: &Manager, command: &str, args: &[&str]
     cmd.stderr(Stdio::null());
     
     // Spawn the process in the background
-    // Note: child.id() returns the PID on Unix systems
+    // Note: child.id() returns the PID on Unix/Linux systems
     match cmd.spawn() {
         Ok(child) => {
-            // On Unix, id() returns the PID
-            #[cfg(unix)]
-            {
-                use std::os::unix::process::ExitStatusExt;
-                Ok(child.id() as u32)
-            }
-            #[cfg(not(unix))]
-            {
-                Err("Background process creation only supported on Unix systems".to_string())
-            }
+            Ok(child.id() as u32)
         }
         Err(e) => Err(format!("Failed to spawn background process: {}", e))
     }
