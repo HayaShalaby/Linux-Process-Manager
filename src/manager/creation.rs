@@ -25,22 +25,43 @@ pub fn create_process_foreground(manager: &Manager, command: &str, args: &[&str]
 
 /// Create a new process in background mode (non-blocking)
 /// Returns the PID of the spawned process
+/// Uses double-fork technique to properly detach the process and prevent zombies
 pub fn create_process_background(manager: &Manager, command: &str, args: &[&str]) -> Result<u32, String> {
     permissions::check_admin_privilege(manager)?;
     
-    let mut cmd = Command::new(command);
-    cmd.args(args);
+    // Use shell to properly detach the process using double-fork technique
+    // This prevents the process from becoming a zombie
+    let mut cmd = Command::new("sh");
+    cmd.arg("-c");
     
-    // Redirect stdin, stdout, stderr to /dev/null for background process
+    // Build the command with arguments
+    let full_command = if args.is_empty() {
+        command.to_string()
+    } else {
+        format!("{} {}", command, args.join(" "))
+    };
+    
+    // Use nohup and & to properly background the process
+    // The shell will handle the double-fork and detach it from our process
+    cmd.arg(&format!("nohup {} > /dev/null 2>&1 & echo $!", full_command));
+    
+    // Redirect stdin to null
     cmd.stdin(Stdio::null());
-    cmd.stdout(Stdio::null());
-    cmd.stderr(Stdio::null());
     
-    // Spawn the process in the background
-    // Note: child.id() returns the PID on Unix/Linux systems
-    match cmd.spawn() {
-        Ok(child) => {
-            Ok(child.id() as u32)
+    // Capture the output to get the PID
+    match cmd.output() {
+        Ok(output) => {
+            if output.status.success() {
+                // Parse the PID from stdout
+                let pid_str = String::from_utf8_lossy(&output.stdout).trim().to_string();
+                match pid_str.parse::<u32>() {
+                    Ok(pid) => Ok(pid),
+                    Err(_) => Err(format!("Failed to parse PID from output: {}", pid_str))
+                }
+            } else {
+                Err(format!("Failed to create background process: {}", 
+                    String::from_utf8_lossy(&output.stderr)))
+            }
         }
         Err(e) => Err(format!("Failed to spawn background process: {}", e))
     }
