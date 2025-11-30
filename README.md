@@ -48,11 +48,11 @@ sudo apt-get install -y \
 
 ```bash
 # Clone the repository
-git clone <repository-url>
+git clone https://github.com/HayaShalaby/Linux-Process-Manager.git
 cd Linux-Process-Manager
 
-# Switch to the TLI-GUI branch
-git checkout TLI-GUI
+# Switch to the RefaiGUI branch (or TLI-GUI branch)
+git checkout RefaiGUI
 
 # Build the project
 cargo build --release
@@ -105,6 +105,7 @@ src/
 
 - `main`: Main development branch
 - `backend--Ismaiel`: Backend implementation by Ismail
+- `RefaiGUI`: Complete GUI implementation with all checklist features (Refai)
 - `TLI-GUI`: GUI (Text/Linux Interface) implementation
 
 ## Development

@@ -1,5 +1,9 @@
 use crate::process::Process;
 use crate::process::tree::ProcessNode;
+use crate::manager::Manager;
+use crate::manager::operations;
+use crate::manager::batch;
+use crate::user::{User, Privilege};
 use egui::{Color32, RichText, ScrollArea, TextEdit};
 use procfs::ProcError;
 use std::collections::{HashSet, HashMap};
@@ -23,8 +27,9 @@ impl Default for ResourceThresholds {
 
 /// Main application state for the Process Manager GUI
 pub struct ProcessManagerApp {
-    processes: Vec<Process>,
-    filtered_processes: Vec<usize>, // Indices into processes vec
+    manager: Manager,
+    processes_vec: Vec<Process>, // Cached vector for display
+    filtered_processes: Vec<usize>, // Indices into processes_vec
     search_filter: String,
     sort_column: SortColumn,
     sort_ascending: bool,
@@ -54,8 +59,21 @@ enum SortColumn {
 
 impl Default for ProcessManagerApp {
     fn default() -> Self {
+        // Create a default admin user for GUI
+        let admin_user = User::new(0, "admin", Privilege::Admin);
+        let manager = Manager::new(admin_user).unwrap_or_else(|e| {
+            eprintln!("Failed to initialize manager: {}", e);
+            // Create a minimal manager if initialization fails
+            Manager {
+                processes: HashMap::new(),
+                active_user: admin_user,
+                root_pid: 1,
+            }
+        });
+        
         Self {
-            processes: Vec::new(),
+            manager,
+            processes_vec: Vec::new(),
             filtered_processes: Vec::new(),
             search_filter: String::new(),
             sort_column: SortColumn::Pid,
@@ -82,36 +100,21 @@ impl ProcessManagerApp {
         app
     }
 
-    /// Refresh the process list from /proc filesystem
+    /// Refresh the process list from /proc filesystem using Manager
     fn refresh_processes(&mut self) {
         self.error_message = None;
         self.success_message = None;
-        self.processes.clear();
-
-        match procfs::process::all_processes() {
-            Ok(procfs_processes_iter) => {
-                let procfs_processes: Vec<_> = procfs_processes_iter.collect();
-
-                for procfs_proc_result in procfs_processes {
-                    let procfs_proc = match procfs_proc_result {
-                        Ok(p) => p,
-                        Err(_) => continue,
-                    };
-
-                    let pid = procfs_proc.pid as u32;
-
-                    match Process::try_from(pid) {
-                        Ok(p) => self.processes.push(p),
-                        Err(ProcError::NotFound(_)) => continue,
-                        Err(_) => continue,
-                    }
-                }
-
+        
+        // Use Manager's refresh method
+        match self.manager.refresh() {
+            Ok(_) => {
+                // Update cached vector from manager
+                self.processes_vec = self.manager.processes().into_iter().cloned().collect();
                 self.apply_filters_and_sort();
                 self.last_refresh = Instant::now();
             }
             Err(e) => {
-                self.error_message = Some(format!("Failed to read /proc filesystem: {:?}", e));
+                self.error_message = Some(format!("Failed to refresh processes: {}", e));
             }
         }
     }
@@ -120,7 +123,7 @@ impl ProcessManagerApp {
     fn apply_filters_and_sort(&mut self) {
         // Filter processes
         self.filtered_processes = self
-            .processes
+            .processes_vec
             .iter()
             .enumerate()
             .filter(|(_, p)| {
@@ -138,26 +141,26 @@ impl ProcessManagerApp {
         // Sort filtered indices
         self.filtered_processes.sort_by(|&a, &b| {
             let cmp = match self.sort_column {
-                SortColumn::Pid => self.processes[a].process_id.cmp(&self.processes[b].process_id),
-                SortColumn::Name => self.processes[a].name.cmp(&self.processes[b].name),
-                SortColumn::Uid => self.processes[a].user_id.cmp(&self.processes[b].user_id),
-                SortColumn::State => self.processes[a]
+                SortColumn::Pid => self.processes_vec[a].process_id.cmp(&self.processes_vec[b].process_id),
+                SortColumn::Name => self.processes_vec[a].name.cmp(&self.processes_vec[b].name),
+                SortColumn::Uid => self.processes_vec[a].user_id.cmp(&self.processes_vec[b].user_id),
+                SortColumn::State => self.processes_vec[a]
                     .pcb_data
                     .state
-                    .cmp(&self.processes[b].pcb_data.state),
-                SortColumn::Cpu => self.processes[a]
+                    .cmp(&self.processes_vec[b].pcb_data.state),
+                SortColumn::Cpu => self.processes_vec[a]
                     .pcb_data
                     .cpu_percent
-                    .partial_cmp(&self.processes[b].pcb_data.cpu_percent)
+                    .partial_cmp(&self.processes_vec[b].pcb_data.cpu_percent)
                     .unwrap_or(std::cmp::Ordering::Equal),
-                SortColumn::Memory => self.processes[a]
+                SortColumn::Memory => self.processes_vec[a]
                     .pcb_data
                     .memory_rss_mb
-                    .cmp(&self.processes[b].pcb_data.memory_rss_mb),
-                SortColumn::Priority => self.processes[a]
+                    .cmp(&self.processes_vec[b].pcb_data.memory_rss_mb),
+                SortColumn::Priority => self.processes_vec[a]
                     .pcb_data
                     .priority
-                    .cmp(&self.processes[b].pcb_data.priority),
+                    .cmp(&self.processes_vec[b].pcb_data.priority),
             };
 
             if self.sort_ascending {
@@ -171,7 +174,7 @@ impl ProcessManagerApp {
     /// Get selected process details
     fn get_selected_process(&self) -> Option<&Process> {
         self.selected_pid
-            .and_then(|pid| self.processes.iter().find(|p| p.process_id == pid))
+            .and_then(|pid| self.processes_vec.iter().find(|p| p.process_id == pid))
     }
 
     /// Toggle selection of a process for batch operations
@@ -220,62 +223,10 @@ impl ProcessManagerApp {
         }
     }
 
-    /// Build process tree structure
-    fn build_process_tree(&self) -> Vec<ProcessNode> {
-        use crate::process::tree::ProcessNode;
-        
-        // Create a map of PID to ProcessNode
-        let mut node_map: HashMap<u32, ProcessNode> = HashMap::new();
-        
-        // First pass: create all nodes
-        for process in &self.processes {
-            node_map.insert(process.process_id, ProcessNode::new(process.clone()));
-        }
-        
-        // Second pass: build parent-child relationships
-        // Collect child nodes to add to parents
-        let mut children_to_add: Vec<(u32, ProcessNode)> = Vec::new();
-        let mut roots = Vec::new();
-        
-        for process in &self.processes {
-            if let Some(parent_id) = process.parent_id {
-                if node_map.contains_key(&parent_id) {
-                    // Parent exists, we'll add this as a child
-                    if let Some(child_node) = node_map.remove(&process.process_id) {
-                        children_to_add.push((parent_id, child_node));
-                    }
-                } else {
-                    // Parent not found, treat as root
-                    if let Some(root_node) = node_map.remove(&process.process_id) {
-                        roots.push(root_node);
-                    }
-                }
-            } else {
-                // No parent, it's a root
-                if let Some(root_node) = node_map.remove(&process.process_id) {
-                    roots.push(root_node);
-                }
-            }
-        }
-        
-        // Add children to their parents
-        for (parent_id, child_node) in children_to_add {
-            if let Some(parent_node) = node_map.get_mut(&parent_id) {
-                parent_node.children.push(child_node);
-            } else {
-                // Parent was already moved to roots, find it and add child
-                for root in &mut roots {
-                    if root.process.process_id == parent_id {
-                        root.children.push(child_node);
-                        break;
-                    }
-                }
-            }
-        }
-        
-        // Add remaining nodes as roots
-        roots.extend(node_map.into_values());
-        roots
+    /// Build process tree structure using Manager
+    fn build_process_tree(&self) -> Option<ProcessNode> {
+        // Use Manager's build_process_tree method
+        self.manager.build_process_tree()
     }
 
     /// Render process tree node recursively
@@ -326,67 +277,105 @@ impl ProcessManagerApp {
         }
     }
 
-    // Placeholder backend function calls (to be connected when backend is ready)
+    // Real backend function calls using Ismail's implementation
     fn kill_process(&mut self, pid: u32) -> Result<(), String> {
-        // TODO: Connect to backend ProcessOperations::kill_process(pid)
-        // For now, just show a message
-        self.success_message = Some(format!("Kill process {} (backend not connected)", pid));
-        Ok(())
+        operations::kill_process(&self.manager, pid)
     }
 
-    fn force_kill_process(&mut self, pid: u32) -> Result<(), String> {
-        // TODO: Connect to backend ProcessOperations::force_kill_process(pid)
-        self.success_message = Some(format!("Force kill process {} (backend not connected)", pid));
-        Ok(())
+    fn terminate_process(&mut self, pid: u32) -> Result<(), String> {
+        operations::terminate_process(&self.manager, pid)
     }
 
     fn pause_process(&mut self, pid: u32) -> Result<(), String> {
-        // TODO: Connect to backend ProcessOperations::pause_process(pid)
-        self.success_message = Some(format!("Pause process {} (backend not connected)", pid));
-        Ok(())
+        operations::pause_process(&self.manager, pid)
     }
 
     fn resume_process(&mut self, pid: u32) -> Result<(), String> {
-        // TODO: Connect to backend ProcessOperations::resume_process(pid)
-        self.success_message = Some(format!("Resume process {} (backend not connected)", pid));
-        Ok(())
+        operations::resume_process(&self.manager, pid)
     }
 
     fn set_priority(&mut self, pid: u32, nice: i32) -> Result<(), String> {
-        // TODO: Connect to backend ProcessOperations::set_priority(pid, nice)
-        self.success_message = Some(format!(
-            "Set priority {} for process {} (backend not connected)",
-            nice, pid
-        ));
-        Ok(())
+        operations::set_priority(&self.manager, pid, nice)
     }
 
     fn batch_kill(&mut self, pids: Vec<u32>, force: bool) {
-        // TODO: Connect to backend BatchOperations::batch_kill(&pids, force)
-        let action = if force { "Force kill" } else { "Kill" };
-        self.success_message = Some(format!(
-            "{} {} process(es) (backend not connected)",
-            action,
-            pids.len()
-        ));
+        let mut successful = 0;
+        let mut failed = 0;
+        
+        for pid in &pids {
+            let result = if force {
+                operations::kill_process(&self.manager, *pid)
+            } else {
+                operations::terminate_process(&self.manager, *pid)
+            };
+            
+            match result {
+                Ok(_) => successful += 1,
+                Err(e) => {
+                    failed += 1;
+                    eprintln!("Failed to {} process {}: {}", if force { "kill" } else { "terminate" }, pid, e);
+                }
+            }
+        }
+        
+        if failed == 0 {
+            self.success_message = Some(format!(
+                "Successfully {} {} process(es)",
+                if force { "killed" } else { "terminated" },
+                successful
+            ));
+        } else {
+            self.error_message = Some(format!(
+                "{} {} process(es), {} failed",
+                if force { "Killed" } else { "Terminated" },
+                successful,
+                failed
+            ));
+        }
         self.clear_selections();
     }
 
     fn batch_pause(&mut self, pids: Vec<u32>) {
-        // TODO: Connect to backend BatchOperations::batch_pause(&pids)
-        self.success_message = Some(format!(
-            "Pause {} process(es) (backend not connected)",
-            pids.len()
-        ));
+        let mut successful = 0;
+        let mut failed = 0;
+        
+        for pid in &pids {
+            match operations::pause_process(&self.manager, *pid) {
+                Ok(_) => successful += 1,
+                Err(e) => {
+                    failed += 1;
+                    eprintln!("Failed to pause process {}: {}", pid, e);
+                }
+            }
+        }
+        
+        if failed == 0 {
+            self.success_message = Some(format!("Successfully paused {} process(es)", successful));
+        } else {
+            self.error_message = Some(format!("Paused {} process(es), {} failed", successful, failed));
+        }
         self.clear_selections();
     }
 
     fn batch_resume(&mut self, pids: Vec<u32>) {
-        // TODO: Connect to backend BatchOperations::batch_resume(&pids)
-        self.success_message = Some(format!(
-            "Resume {} process(es) (backend not connected)",
-            pids.len()
-        ));
+        let mut successful = 0;
+        let mut failed = 0;
+        
+        for pid in &pids {
+            match operations::resume_process(&self.manager, *pid) {
+                Ok(_) => successful += 1,
+                Err(e) => {
+                    failed += 1;
+                    eprintln!("Failed to resume process {}: {}", pid, e);
+                }
+            }
+        }
+        
+        if failed == 0 {
+            self.success_message = Some(format!("Successfully resumed {} process(es)", successful));
+        } else {
+            self.error_message = Some(format!("Resumed {} process(es), {} failed", successful, failed));
+        }
         self.clear_selections();
     }
 }
@@ -547,9 +536,10 @@ impl eframe::App for ProcessManagerApp {
                 if self.show_tree_view {
                     // Tree view
                     ScrollArea::vertical().show(ui, |ui| {
-                        let roots = self.build_process_tree();
-                        for root in roots {
+                        if let Some(root) = self.build_process_tree() {
                             self.render_tree_node(ui, &root, 0);
+                        } else {
+                            ui.label("Failed to build process tree");
                         }
                     });
                 } else {
@@ -732,7 +722,7 @@ impl eframe::App for ProcessManagerApp {
                                 let mut selection_changes: Vec<u32> = Vec::new();
                                 
                                 for &idx in &self.filtered_processes {
-                                    let process = &self.processes[idx];
+                                    let process = &self.processes_vec[idx];
                                     let is_selected = self.selected_pids.contains(&process.process_id);
                                     let is_abnormal = self.is_abnormal(process);
 
@@ -900,6 +890,7 @@ impl eframe::App for ProcessManagerApp {
                                     if ui.button("Kill").clicked() {
                                         match self.kill_process(process_pid) {
                                             Ok(_) => {
+                                                self.success_message = Some(format!("Killed process {}", process_pid));
                                                 self.refresh_processes();
                                             }
                                             Err(e) => self.error_message = Some(e),
@@ -907,8 +898,19 @@ impl eframe::App for ProcessManagerApp {
                                     }
 
                                     if ui.button("Force Kill").clicked() {
-                                        match self.force_kill_process(process_pid) {
+                                        match self.kill_process(process_pid) {
                                             Ok(_) => {
+                                                self.success_message = Some(format!("Force killed process {}", process_pid));
+                                                self.refresh_processes();
+                                            }
+                                            Err(e) => self.error_message = Some(e),
+                                        }
+                                    }
+                                    
+                                    if ui.button("Terminate").clicked() {
+                                        match self.terminate_process(process_pid) {
+                                            Ok(_) => {
+                                                self.success_message = Some(format!("Terminated process {}", process_pid));
                                                 self.refresh_processes();
                                             }
                                             Err(e) => self.error_message = Some(e),
@@ -918,6 +920,7 @@ impl eframe::App for ProcessManagerApp {
                                     if ui.button("Pause").clicked() {
                                         match self.pause_process(process_pid) {
                                             Ok(_) => {
+                                                self.success_message = Some(format!("Paused process {}", process_pid));
                                                 self.refresh_processes();
                                             }
                                             Err(e) => self.error_message = Some(e),
@@ -927,6 +930,7 @@ impl eframe::App for ProcessManagerApp {
                                     if ui.button("Resume").clicked() {
                                         match self.resume_process(process_pid) {
                                             Ok(_) => {
+                                                self.success_message = Some(format!("Resumed process {}", process_pid));
                                                 self.refresh_processes();
                                             }
                                             Err(e) => self.error_message = Some(e),
@@ -943,6 +947,7 @@ impl eframe::App for ProcessManagerApp {
                                             if let Ok(nice) = self.priority_input.parse::<i32>() {
                                                 match self.set_priority(process_pid, nice) {
                                                     Ok(_) => {
+                                                        self.success_message = Some(format!("Set priority {} for process {}", nice, process_pid));
                                                         self.priority_input.clear();
                                                         self.refresh_processes();
                                                     }
