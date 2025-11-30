@@ -82,12 +82,12 @@ impl Process {
     fn calculate_uptime(starttime_jiffies: u64) -> Result<u64, ProcError> {
         // Get system uptime from /proc/uptime
         let uptime_str = std::fs::read_to_string("/proc/uptime")
-            .map_err(|_| ProcError::NotFound(0))?;
+            .map_err(|_| ProcError::NotFound(None))?;
         let system_uptime_secs: f64 = uptime_str
             .split_whitespace()
             .next()
             .and_then(|s| s.parse().ok())
-            .ok_or_else(|| ProcError::NotFound(0))?;
+            .ok_or_else(|| ProcError::NotFound(None))?;
         
         // Get system HZ (clock ticks per second)
         let hz = Self::get_system_hz();
