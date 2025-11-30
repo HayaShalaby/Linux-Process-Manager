@@ -140,6 +140,12 @@ impl ProcessManagerApp {
             .iter()
             .enumerate()
             .filter(|(_, p)| {
+                // Filter by zombie state if enabled
+                if self.show_only_zombies && p.pcb_data.state != 'Z' {
+                    return false;
+                }
+                
+                // Filter by search term
                 if self.search_filter.is_empty() {
                     return true;
                 }
@@ -759,6 +765,15 @@ impl eframe::App for ProcessManagerApp {
                     let response = ui.text_edit_singleline(&mut self.search_filter);
                     if response.changed() {
                         self.apply_filters_and_sort();
+                    }
+                    
+                    // Show zombie filter indicator
+                    if self.show_only_zombies {
+                        ui.label(
+                            RichText::new("🧟 Zombies Only")
+                                .color(Color32::YELLOW)
+                                .strong()
+                        );
                     }
 
                     if ui.button("Clear Selection").clicked() {
