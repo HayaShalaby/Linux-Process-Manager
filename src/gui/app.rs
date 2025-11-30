@@ -48,6 +48,7 @@ pub struct ProcessManagerApp {
     create_process_command: String,
     create_process_args: String,
     create_process_background: bool,
+    show_only_zombies: bool,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -100,6 +101,7 @@ impl Default for ProcessManagerApp {
             create_process_command: String::new(),
             create_process_args: String::new(),
             create_process_background: false,
+            show_only_zombies: false,
         }
     }
 }
@@ -568,6 +570,15 @@ impl eframe::App for ProcessManagerApp {
                     ui.checkbox(&mut self.auto_refresh, "Auto Refresh");
                     ui.checkbox(&mut self.show_tree_view, "Process Tree View");
                     ui.checkbox(&mut self.show_threshold_config, "Configure Thresholds");
+                    ui.separator();
+                    ui.checkbox(&mut self.show_only_zombies, "Show Only Zombie Processes");
+                    if self.show_only_zombies {
+                        ui.label(
+                            RichText::new("⚠️ Filtering to show only zombie processes")
+                                .color(Color32::YELLOW)
+                                .small()
+                        );
+                    }
                     ui.separator();
                     if ui.button("Sort by PID").clicked() {
                         self.sort_column = SortColumn::Pid;
