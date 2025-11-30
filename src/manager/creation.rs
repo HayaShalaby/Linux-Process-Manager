@@ -25,24 +25,34 @@ pub fn create_process_foreground(manager: &Manager, command: &str, args: &[&str]
 
 /// Create a new process in background mode (non-blocking)
 /// Returns the PID of the spawned process
-/// Uses double-fork technique to properly detach the process and prevent zombies
+/// Uses shell with proper argument escaping to safely detach the process
 pub fn create_process_background(manager: &Manager, command: &str, args: &[&str]) -> Result<u32, String> {
     permissions::check_admin_privilege(manager)?;
     
     // Use shell to properly detach the process using double-fork technique
     // This prevents the process from becoming a zombie
+    // We properly escape arguments to prevent shell injection
     let mut cmd = Command::new("sh");
     cmd.arg("-c");
     
-    // Build the command with arguments
+    // Build the command with properly escaped arguments
+    // Using printf %q to safely quote arguments (if available) or manual escaping
+    let mut escaped_args = Vec::new();
+    for arg in args {
+        // Simple escaping: wrap in single quotes and escape single quotes within
+        let escaped = arg.replace('\'', "'\"'\"'");
+        escaped_args.push(format!("'{}'", escaped));
+    }
+    
     let full_command = if args.is_empty() {
         command.to_string()
     } else {
-        format!("{} {}", command, args.join(" "))
+        format!("{} {}", command, escaped_args.join(" "))
     };
     
     // Use nohup and & to properly background the process
     // The shell will handle the double-fork and detach it from our process
+    // echo $! outputs the PID of the backgrounded process
     cmd.arg(&format!("nohup {} > /dev/null 2>&1 & echo $!", full_command));
     
     // Redirect stdin to null
@@ -59,8 +69,8 @@ pub fn create_process_background(manager: &Manager, command: &str, args: &[&str]
                     Err(_) => Err(format!("Failed to parse PID from output: {}", pid_str))
                 }
             } else {
-                Err(format!("Failed to create background process: {}", 
-                    String::from_utf8_lossy(&output.stderr)))
+                let error_msg = String::from_utf8_lossy(&output.stderr);
+                Err(format!("Failed to create background process: {}", error_msg))
             }
         }
         Err(e) => Err(format!("Failed to spawn background process: {}", e))
