@@ -1,23 +1,23 @@
 
-use procfs::{
-    process::Process as ProcfsProcess,
-    ProcError,
-};
+
 use std::convert::TryFrom;
 
-// 1. Declare submodules
+//Declare submodules
 mod pcb; 
 mod scheduler; // Placeholder
 pub mod tree;
 
-// 2. Import the public PcbData struct from the pcb submodule
+//Import the public PcbData struct from the pcb submodule
 use pcb::PcbData; 
 
+use procfs::{
+    process::Process as ProcfsProcess,
+    ProcError,
+};
 
-// Main Process Data Structure 
 
-/// Represents a single process on the system.
-#[derive(Debug)]
+//Represents a single process on the system.
+#[derive(Debug, Clone)] 
 pub struct Process {
     pub process_id: u32,
     pub user_id: u32,
@@ -27,7 +27,6 @@ pub struct Process {
 }
 
 
-// Implementation
 
 impl TryFrom<u32> for Process {
     type Error = ProcError;
@@ -41,7 +40,7 @@ impl TryFrom<u32> for Process {
         let user_id = status.ruid;
         let cpu_percent_placeholder = 0.0; 
 
-        // 3. Construct the custom Process struct
+        //Construct the custom Process struct
         Ok(Process {
             process_id: pid,
             user_id,
