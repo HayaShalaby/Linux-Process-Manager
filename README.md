@@ -73,6 +73,11 @@ cargo run --release
 ./target/release/lpm_backend
 ```
 
+## Demo Video
+
+Watch the project demo video:
+- [Project Demo Video](https://drive.google.com/file/d/1rOonjtb3V5uYefNyozDfy0VHUV92EVXm/view?usp=share_link)
+
 ## Usage
 
 1. **View Processes**: The main window displays all running processes in a sortable table
