@@ -67,6 +67,7 @@ impl Default for ProcessManagerApp {
                 processes: HashMap::new(),
                 active_user: admin_user,
                 root_pid: 1,
+                previous_cpu_times: HashMap::new(),
             }
         });
         

@@ -1,4 +1,5 @@
 use std::collections::HashMap;
+use std::time::Instant;
 use crate::process::Process;
 use crate::user::User;
 
@@ -14,7 +15,10 @@ pub mod permissions;
 pub struct Manager {
     pub processes: HashMap<u32, Process>, 
     pub active_user: User, 
-    pub root_pid: u32, 
+    pub root_pid: u32,
+    // Track previous CPU times for CPU percentage calculation
+    // HashMap<pid, (cpu_time_jiffies, timestamp)>
+    pub(crate) previous_cpu_times: HashMap<u32, (u64, Instant)>,
 }
 
 impl Manager {
@@ -24,10 +28,11 @@ impl Manager {
             processes: HashMap::new(), // Start with an empty map
             active_user,
             root_pid: 1,
+            previous_cpu_times: HashMap::new(),
         };
         
         //Initial snapshot at initialization
-        match monitoring::refresh_processes(&mut manager.processes) {
+        match monitoring::refresh_processes(&mut manager.processes, &mut manager.previous_cpu_times) {
             Ok(_) => Ok(manager),
             Err(e) => Err(format!("Failed initial process load: {}", e)),
         }
@@ -35,7 +40,7 @@ impl Manager {
 
     //Deals with live data from Linux system
    pub fn refresh(&mut self) -> Result<(), String> {
-    monitoring::refresh_processes(&mut self.processes).map(|_| ())
+    monitoring::refresh_processes(&mut self.processes, &mut self.previous_cpu_times).map(|_| ())
 }
 
     pub fn build_process_tree(&self) -> Option<crate::process::tree::ProcessNode> {

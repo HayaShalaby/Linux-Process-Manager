@@ -148,13 +148,7 @@ cargo fmt
 
 ### Currently Not Implemented
 
-1. **CPU Percentage Calculation** ⚠️
-   - CPU % column currently shows 0.0 for all processes
-   - CPU calculation requires tracking process CPU time over intervals
-   - Threshold monitoring for CPU is ready but waiting for real CPU values
-   - **Status**: Placeholder implementation - backend calculation needed
-
-2. **Process Timer/Uptime**
+1. **Process Timer/Uptime**
    - Process runtime/uptime is not displayed
    - Would require tracking process start time from `/proc/[pid]/stat`
 
@@ -162,11 +156,13 @@ cargo fmt
 
 ✅ Process listing and display  
 ✅ Process search and filtering  
-✅ Sorting by all columns (PID, Name, UID, State, Memory, Priority)  
+✅ Sorting by all columns (PID, Name, UID, State, CPU, Memory, Priority)  
 ✅ Process tree view  
+✅ **CPU percentage calculation** - Real-time CPU usage tracking with proper jiffies-to-percentage conversion  
 ✅ Memory usage calculation and display  
 ✅ Process state detection and color coding  
 ✅ Zombie process detection  
+✅ CPU and memory threshold monitoring with visual indicators  
 ✅ Memory threshold monitoring  
 ✅ Process operations (kill, terminate, pause, resume, set priority)  
 ✅ Batch operations  
