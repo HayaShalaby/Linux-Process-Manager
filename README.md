@@ -83,6 +83,11 @@ Watch the project demo video:
 Read the detailed project report:
 - [Project Report](https://docs.google.com/document/d/10aG-ECqWrKKxkOioYXx-f3QD5gQ6YEUhPlHxJkeYzR4/edit?usp=sharing)
 
+## Presentation Slides
+
+View the project presentation:
+- [Presentation Slides](https://docs.google.com/presentation/d/1ac1yfvmBpyR0b2SmIsV93vXbH3v1t1gU4KN76c3xMh4/edit?usp=sharing)
+
 ## Usage
 
 1. **View Processes**: The main window displays all running processes in a sortable table
