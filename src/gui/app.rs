@@ -303,11 +303,26 @@ impl ProcessManagerApp {
             let mem_text = RichText::new(format!("{:.1}MB", process.pcb_data.memory_rss_mb))
                 .color(Color32::from_rgb(255, 200, 100));
 
-            // Display process info
+            // Display process info with colored components
             ui.horizontal(|ui| {
-                ui.label(pid_text);
+                let pid_click = ui.selectable_label(
+                    self.selected_pid == Some(process.process_id),
+                    pid_text
+                );
+                if pid_click.clicked() {
+                    self.selected_pid = Some(process.process_id);
+                }
+                
                 ui.label(" • ");
-                ui.label(name_text);
+                
+                let name_click = ui.selectable_label(
+                    self.selected_pid == Some(process.process_id),
+                    name_text
+                );
+                if name_click.clicked() {
+                    self.selected_pid = Some(process.process_id);
+                }
+                
                 ui.label(" • ");
                 ui.label(state_text);
                 ui.label(" • ");
@@ -321,11 +336,6 @@ impl ProcessManagerApp {
                     );
                 }
             });
-
-            // Make the whole row clickable
-            if ui.interact(ui.available_rect(), egui::Id::new(process.process_id), egui::Sense::click()).clicked() {
-                self.selected_pid = Some(process.process_id);
-            }
         });
 
         // Render children with proper tree structure
