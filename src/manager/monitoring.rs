@@ -34,7 +34,7 @@ fn get_num_cores() -> f32 {
 /// This is typically 100 on most Linux systems, but can be 1000 on newer kernels
 fn get_hz() -> f64 {
     // Try to get from sysconf first (more reliable)
-    extern "C" {
+    unsafe extern "C" {
         fn sysconf(name: i32) -> i64;
     }
     
